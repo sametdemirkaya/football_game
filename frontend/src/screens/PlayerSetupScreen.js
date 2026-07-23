@@ -49,8 +49,8 @@ export default function PlayerSetupScreen({ route, navigation }) {
       {/* Buton Alanı */}
       <View style={styles.buttonContainer}>
         <CustomButton 
-          title="Kaydet ve Sahaya Çık" 
-          onPress={() => navigation.navigate('Game')} 
+          title="İleri" 
+          onPress={() => navigation.navigate('Difficulty', { mode, player1, player2 })} 
           style={styles.button}
         />
       </View>

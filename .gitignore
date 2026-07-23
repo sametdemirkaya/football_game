@@ -145,3 +145,10 @@ vite.config.ts.timestamp-*
 # Veri çekerken gereksiz indirilen dosyalar
 downloaded_files/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/

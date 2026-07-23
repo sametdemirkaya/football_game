@@ -6,6 +6,7 @@ import HomeScreen from './src/screens/HomeScreen';
 import PlayerSetupScreen from './src/screens/PlayerSetupScreen';
 import GameScreen from './src/screens/GameScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import DifficultyScreen from './src/screens/DifficultyScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -22,6 +23,11 @@ export default function App() {
           name="PlayerSetup"
           component={PlayerSetupScreen}
           options={{ title: 'Oyuncu Kurulumu' }}
+        />
+        <Stack.Screen
+          name="Difficulty"
+          component={DifficultyScreen}
+          options={{ title: 'Zorluk Seçimi' }}
         />
         <Stack.Screen
           name="Game"
