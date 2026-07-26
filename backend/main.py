@@ -4,8 +4,16 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import pandas as pd
 import numpy as np
+import difflib
 import os
+import unicodedata
 
+def normalize_text(text):
+    if not isinstance(text, str):
+        return ""
+    # NFKD ile karakterleri ve aksanları ayır, sonra aksanları sil
+    nfkd_form = unicodedata.normalize('NFKD', text)
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)]).lower().strip()
 
 # Veri setini hızlıca erişebilmek için tutacağımız global değişken (In-Memory)
 game_data = None
@@ -85,7 +93,7 @@ UNIVERSAL_FEATURES = ['Player', 'Age', 'Team', 'League', 'Pos', 'Zorluk_Seviyesi
 POSITION_SPECIFIC_FEATURES = {
     'FW': ['Gls', 'Ast', 'SoT'],   # Forvet (Gol, Asist, İsabetli Şut)
     'MF': ['Ast', 'Crs', 'Int'],   # Orta Saha (Asist, Orta, Pas Arası)
-    'DF': ['TklW', 'Int', 'CS'],   # Defans (Kazanılan İkili Mücadele, Pas Arası, Gol Yememe)
+    'DF': ['TklW', 'Int', 'CrdY'], # Defans (Kazanılan İkili Mücadele, Pas Arası, Sarı Kart)
     'GK': ['Saves', 'CS', 'GA']    # Kaleci (Kurtarış, Gol Yememe, Yenilen Gol)
 }
 
@@ -156,10 +164,85 @@ def start_game(difficulty: str):
 
 # Frontend'den gelecek JSON yapısını Pydantic modeli ile tanımlıyoruz
 class RoundSubmit(BaseModel):
+    target_player_name: str
     target_stat_name: str
     target_stat_value: float
     player1_guess: str
     player2_guess: str
+
+@app.get("/search-player")
+def search_player(query: str):
+    """
+    Kullanıcının yazdığı metne göre oyuncuyu arar.
+    Tam eşleşirse direkt oyuncuyu döndürür. Kısmi veya harf hatalı eşleşirse en yüksek skorlu 3 oyuncuyu önerir.
+    """
+    global game_data
+    if game_data is None:
+        raise HTTPException(status_code=500, detail="Oyun verisi henüz yüklenmedi.")
+        
+    cleaned_guess = normalize_text(query)
+    normalized_names = game_data['Player'].apply(normalize_text)
+    
+    # ADIM A: Birebir Eşleşme
+    exact_match = game_data[normalized_names == cleaned_guess]
+    if not exact_match.empty:
+        best_player = exact_match.sort_values(by='oynanabilirlik_skoru', ascending=False).iloc[0]
+        return {"match_type": "exact", "players": [{"name": best_player['Player'], "score": best_player['oynanabilirlik_skoru']}]}
+        
+    # ADIM B: İçinde Geçme (Substring Match)
+    substring_match = game_data[normalized_names.str.contains(cleaned_guess, regex=False, na=False)]
+    if not substring_match.empty:
+        top_candidates = substring_match.sort_values(by='oynanabilirlik_skoru', ascending=False).head(3)
+        if len(top_candidates) == 1:
+            return {"match_type": "exact", "players": [{"name": top_candidates.iloc[0]['Player'], "score": top_candidates.iloc[0]['oynanabilirlik_skoru']}]}
+        return {
+            "match_type": "multiple",
+            "players": [{"name": row['Player'], "score": row['oynanabilirlik_skoru']} for _, row in top_candidates.iterrows()]
+        }
+        
+    # ADIM C: Toleranslı Arama (Fuzzy Match)
+    all_players_list = normalized_names.tolist()
+    matches = difflib.get_close_matches(cleaned_guess, all_players_list, n=5, cutoff=0.45)
+    
+    if matches:
+        fuzzy_df = game_data[normalized_names.isin(matches)]
+        top_candidates = fuzzy_df.sort_values(by='oynanabilirlik_skoru', ascending=False).head(3)
+        if len(top_candidates) == 1:
+            return {"match_type": "exact", "players": [{"name": top_candidates.iloc[0]['Player'], "score": top_candidates.iloc[0]['oynanabilirlik_skoru']}]}
+        return {
+            "match_type": "multiple",
+            "players": [{"name": row['Player'], "score": row['oynanabilirlik_skoru']} for _, row in top_candidates.iterrows()]
+        }
+        
+    return {"match_type": "none", "players": []}
+
+def fuzzy_find_player(guess_name: str, df: pd.DataFrame):
+    """
+    Kullanıcının girdiği oyuncu adını 3 aşamalı (Tam -> İçinde Geçme -> Toleranslı)
+    bir hiyerarşi ile veritabanında arar. Birden fazla aday bulunursa en popüler olanı seçer.
+    """
+    cleaned_guess = normalize_text(guess_name)
+    normalized_names = df['Player'].apply(normalize_text)
+    
+    # --- ADIM A: Birebir Eşleşme (Exact Match) ---
+    exact_match = df[normalized_names == cleaned_guess]
+    if not exact_match.empty:
+        return exact_match.sort_values(by='oynanabilirlik_skoru', ascending=False).iloc[0]
+        
+    # --- ADIM B: İçinde Geçme (Substring Match) ---
+    substring_match = df[normalized_names.str.contains(cleaned_guess, regex=False, na=False)]
+    if not substring_match.empty:
+        return substring_match.sort_values(by='oynanabilirlik_skoru', ascending=False).iloc[0]
+        
+    # --- ADIM C: Toleranslı Arama (Fuzzy Match) ---
+    all_players_list = normalized_names.tolist()
+    matches = difflib.get_close_matches(cleaned_guess, all_players_list, n=5, cutoff=0.45)
+    
+    if matches:
+        fuzzy_df = df[normalized_names.isin(matches)]
+        return fuzzy_df.sort_values(by='oynanabilirlik_skoru', ascending=False).iloc[0]
+        
+    return None
 
 @app.post("/submit-round")
 def submit_round(data: RoundSubmit):
@@ -172,26 +255,25 @@ def submit_round(data: RoundSubmit):
     if game_data is None:
         raise HTTPException(status_code=500, detail="Oyun verisi henüz yüklenmedi.")
         
-    # Gelen tahminleri küçük harfe çevirip boşlukları temizleyelim (Case-Insensitive Arama İçin)
-    p1_search_name = data.player1_guess.strip().lower()
-    p2_search_name = data.player2_guess.strip().lower()
     stat_name = data.target_stat_name
     
-    # 1. Veri setinde isim araması (str.lower ve str.strip ile kesin eşleşme)
-    # Series nesnesini string gibi işlemden geçirmek için .str metodunu kullanıyoruz
-    p1_row = game_data[game_data['Player'].str.lower().str.strip() == p1_search_name]
-    p2_row = game_data[game_data['Player'].str.lower().str.strip() == p2_search_name]
+    # 1. Toleranslı (Fuzzy) isim araması ile oyuncuları bul
+    p1_data = fuzzy_find_player(data.player1_guess, game_data)
+    p2_data = fuzzy_find_player(data.player2_guess, game_data)
     
     # Tahmin edilen oyunculardan biri bulunamazsa hata döndür
-    if p1_row.empty:
-        raise HTTPException(status_code=404, detail=f"1. Oyuncunun tahmini olan '{data.player1_guess}' veri setinde bulunamadı!")
-    if p2_row.empty:
-        raise HTTPException(status_code=404, detail=f"2. Oyuncunun tahmini olan '{data.player2_guess}' veri setinde bulunamadı!")
+    if p1_data is None:
+        raise HTTPException(status_code=404, detail=f"1. Oyuncunun tahmini olan '{data.player1_guess}' veri setinde (yakın isim olarak bile) bulunamadı!")
+    if p2_data is None:
+        raise HTTPException(status_code=404, detail=f"2. Oyuncunun tahmini olan '{data.player2_guess}' veri setinde (yakın isim olarak bile) bulunamadı!")
         
-    # Eğer isme ait birden fazla oyuncu dönerse (örn: aynı isimli farklı oyuncular), ilkini (en popüler olanı) alalım
-    p1_data = p1_row.iloc[0]
-    p2_data = p2_row.iloc[0]
-    
+    # Kurnazlık Kontrolü: Hedef oyuncunun kendisini yazmayı engelle (Büyük/Küçük harf duyarsız)
+    target_player_clean = data.target_player_name.strip().lower()
+    if p1_data['Player'].strip().lower() == target_player_clean:
+        raise HTTPException(status_code=400, detail="1. Oyuncu kurnazlık yapıyor! Tahtadaki hedef oyuncunun kendisini tahmin edemezsiniz.")
+    if p2_data['Player'].strip().lower() == target_player_clean:
+        raise HTTPException(status_code=400, detail="2. Oyuncu kurnazlık yapıyor! Tahtadaki hedef oyuncunun kendisini tahmin edemezsiniz.")
+        
     # Hedef istatistik veri setinde var mı kontrolü
     if stat_name not in p1_data or stat_name not in p2_data:
         raise HTTPException(status_code=400, detail=f"Hatalı istatistik adı: '{stat_name}' veri setinde mevcut değil.")

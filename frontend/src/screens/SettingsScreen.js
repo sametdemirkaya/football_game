@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Switch, SafeAreaView, TouchableOpacity } from 'react-native';
-import CustomButton from '../components/CustomButton';
+import PrimaryButton from '../components/PrimaryButton';
+import SurfaceCard from '../components/SurfaceCard';
+import { theme } from '../theme';
 
 export default function SettingsScreen({ navigation }) {
   const [musicEnabled, setMusicEnabled] = useState(true);
@@ -9,68 +11,54 @@ export default function SettingsScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Başlık */}
       <Text style={styles.title}>AYARLAR</Text>
 
-      {/* Ayar Satırları (List View) */}
       <View style={styles.listContainer}>
         
-        {/* Müzik Ayarı */}
-        <View style={styles.row}>
+        <SurfaceCard style={styles.row}>
           <Text style={styles.rowText}>Müzik</Text>
           <Switch 
             value={musicEnabled} 
             onValueChange={setMusicEnabled}
-            trackColor={{ false: '#D1D5DB', true: '#1E3A8A' }} // Lacivert aktif renk
-            thumbColor={musicEnabled ? '#FFFFFF' : '#F3F4F6'}
-            ios_backgroundColor="#D1D5DB"
+            trackColor={{ false: theme.colors.surfaceSolid, true: theme.colors.primary }}
+            thumbColor={musicEnabled ? '#FFFFFF' : theme.colors.textMuted}
+            ios_backgroundColor={theme.colors.surfaceSolid}
           />
-        </View>
+        </SurfaceCard>
 
-        {/* Dokunma Sesi Ayarı */}
-        <View style={styles.row}>
+        <SurfaceCard style={styles.row}>
           <Text style={styles.rowText}>Dokunma Sesi</Text>
           <Switch 
             value={soundEnabled} 
             onValueChange={setSoundEnabled}
-            trackColor={{ false: '#D1D5DB', true: '#1E3A8A' }}
-            thumbColor={soundEnabled ? '#FFFFFF' : '#F3F4F6'}
-            ios_backgroundColor="#D1D5DB"
+            trackColor={{ false: theme.colors.surfaceSolid, true: theme.colors.primary }}
+            thumbColor={soundEnabled ? '#FFFFFF' : theme.colors.textMuted}
+            ios_backgroundColor={theme.colors.surfaceSolid}
           />
-        </View>
+        </SurfaceCard>
 
-        {/* Dil Ayarı */}
-        <View style={styles.row}>
+        <SurfaceCard style={styles.row}>
           <Text style={styles.rowText}>Dil</Text>
           <View style={styles.languageContainer}>
-            <TouchableOpacity 
-              onPress={() => setLanguage('TR')}
-              style={styles.langButton}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity onPress={() => setLanguage('TR')} style={styles.langButton} activeOpacity={0.7}>
               <Text style={[styles.langText, language === 'TR' && styles.langTextActive]}>TR</Text>
             </TouchableOpacity>
             
             <Text style={styles.langSeparator}>|</Text>
             
-            <TouchableOpacity 
-              onPress={() => setLanguage('EN')}
-              style={styles.langButton}
-              activeOpacity={0.7}
-            >
+            <TouchableOpacity onPress={() => setLanguage('EN')} style={styles.langButton} activeOpacity={0.7}>
               <Text style={[styles.langText, language === 'EN' && styles.langTextActive]}>EN</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SurfaceCard>
 
       </View>
 
-      {/* Geri Dönüş Butonu */}
       <View style={styles.footer}>
-        <CustomButton 
-          title="Ana Sayfaya Dön" 
+        <PrimaryButton 
+          title="GERİ DÖN" 
           onPress={() => navigation.goBack()} 
-          style={styles.backButton}
+          type="secondary"
         />
       </View>
     </SafeAreaView>
@@ -80,67 +68,54 @@ export default function SettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6', // Açık gri arka plan
-    paddingHorizontal: 20,
+    backgroundColor: theme.colors.background,
+    paddingHorizontal: theme.spacing.lg,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '900', // Sportif ve kalın
-    color: '#1F2937', // Koyu gri başlık
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.xxl,
+    color: theme.colors.primary,
     textAlign: 'center',
-    marginTop: 30,
-    marginBottom: 40,
+    marginVertical: theme.spacing.xl,
     letterSpacing: 1.5,
   },
   listContainer: {
     flex: 1,
-    gap: 16, // Satırlar arası boşluk
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF', // Beyaz arka plan
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    borderRadius: 16, // Hafif oval köşeler
-    shadowColor: '#000', // Hafif gölge efekti
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.md,
   },
   rowText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#374151',
+    fontFamily: theme.typography.fontFamily.bodyBold,
+    fontSize: theme.typography.sizes.md,
+    color: theme.colors.textLight,
   },
   languageContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   langButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
   },
   langText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#9CA3AF', // Pasif renk
+    fontFamily: theme.typography.fontFamily.bodyBold,
+    fontSize: theme.typography.sizes.md,
+    color: theme.colors.textMuted,
   },
   langTextActive: {
-    color: '#1E3A8A', // Aktif lacivert
-    fontWeight: 'bold',
+    color: theme.colors.primary,
   },
   langSeparator: {
-    fontSize: 18,
-    color: '#D1D5DB',
-    marginHorizontal: 4,
+    fontSize: theme.typography.sizes.lg,
+    color: theme.colors.surfaceSolid,
+    marginHorizontal: theme.spacing.xs,
   },
   footer: {
-    marginBottom: 40, // En altta boşluk
-  },
-  backButton: {
-    width: '100%',
+    marginBottom: theme.spacing.xl,
   }
 });

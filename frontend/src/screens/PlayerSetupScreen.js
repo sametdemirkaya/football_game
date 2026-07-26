@@ -1,59 +1,69 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, SafeAreaView } from 'react-native';
-import CustomButton from '../components/CustomButton';
+import { View, Text, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, ScrollView } from 'react-native';
+import PrimaryButton from '../components/PrimaryButton';
+import CustomInput from '../components/CustomInput';
+import SurfaceCard from '../components/SurfaceCard';
+import { theme } from '../theme';
 
 export default function PlayerSetupScreen({ route, navigation }) {
-  // HomeScreen'den gelen mod parametresini yakala (varsayılan: multi)
   const mode = route.params?.mode || 'multi';
 
   const [player1, setPlayer1] = useState('');
   const [player2, setPlayer2] = useState('');
 
+  const handleNext = () => {
+    navigation.navigate('Difficulty', { mode, player1, player2 });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Başlık */}
-      <Text style={styles.title}>OYUNCULARI BELİRLE</Text>
+      <KeyboardAvoidingView
+        style={styles.keyboardView}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 100}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
 
-      {/* İsim Giriş Kutuları */}
-      <View style={styles.inputContainer}>
-        {mode === 'single' ? (
-          // Tek Oyunculu Mod
-          <TextInput
-            style={styles.input}
-            placeholder="Oyuncu İsmi (Örn: Samet)"
-            placeholderTextColor="#9CA3AF"
-            value={player1}
-            onChangeText={setPlayer1}
-          />
-        ) : (
-          // Çift Oyunculu Mod
-          <>
-            <TextInput
-              style={styles.input}
-              placeholder="1. Oyuncu (Örn: Samet)"
-              placeholderTextColor="#9CA3AF"
-              value={player1}
-              onChangeText={setPlayer1}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="2. Oyuncu (Örn: Furkan)"
-              placeholderTextColor="#9CA3AF"
-              value={player2}
-              onChangeText={setPlayer2}
-            />
-          </>
-        )}
-      </View>
+            <Text style={styles.title}>OYUNCULARI BELİRLE</Text>
 
-      {/* Buton Alanı */}
-      <View style={styles.buttonContainer}>
-        <CustomButton 
-          title="İleri" 
-          onPress={() => navigation.navigate('Difficulty', { mode, player1, player2 })} 
-          style={styles.button}
-        />
-      </View>
+            <SurfaceCard style={styles.card}>
+              {mode === 'single' ? (
+                <CustomInput
+                  label="Oyuncu İsmi"
+                  placeholder="Örn: Samet"
+                  value={player1}
+                  onChangeText={setPlayer1}
+                />
+              ) : (
+                <>
+                  <CustomInput
+                    label="1. Oyuncu"
+                    placeholder="Örn: Samet"
+                    value={player1}
+                    onChangeText={setPlayer1}
+                  />
+                  <CustomInput
+                    label="2. Oyuncu"
+                    placeholder="Örn: Furkan"
+                    value={player2}
+                    onChangeText={setPlayer2}
+                  />
+                </>
+              )}
+            </SurfaceCard>
+
+            <View style={styles.buttonContainer}>
+              <PrimaryButton
+                title="İLERİ"
+                onPress={handleNext}
+                disabled={mode === 'single' ? !player1.trim() : (!player1.trim() || !player2.trim())}
+              />
+            </View>
+
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -61,42 +71,33 @@ export default function PlayerSetupScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6', // Açık gri arka plan
-    paddingHorizontal: 20,
+    backgroundColor: theme.colors.background,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
+    paddingHorizontal: theme.spacing.lg,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '900', // Sportif kalınlık
-    color: '#1F2937', // Koyu gri metin
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.xxl,
+    color: theme.colors.primary,
     textAlign: 'center',
-    marginBottom: 40,
+    marginBottom: theme.spacing.xl,
     letterSpacing: 1.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
-  inputContainer: {
-    width: '100%',
-    gap: 20, // İki kutu arası boşluk
-    marginBottom: 40,
-  },
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#1E3A8A', // Şık lacivert kenarlık vurgusu
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: '#1F2937',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  card: {
+    marginBottom: theme.spacing.xl,
+    paddingVertical: theme.spacing.xl,
   },
   buttonContainer: {
     width: '100%',
-  },
-  button: {
-    width: '100%',
+    marginTop: theme.spacing.lg,
   }
 });

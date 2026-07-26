@@ -1,29 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TextInput, TouchableOpacity, Alert, Modal, ActivityIndicator } from 'react-native';
-import CustomButton from '../components/CustomButton';
-import { startNewGame, submitRound } from '../api'; // API import
+import { View, Text, StyleSheet, SafeAreaView, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, Modal, ScrollView } from 'react-native';
+import PrimaryButton from '../components/PrimaryButton';
+import CustomInput from '../components/CustomInput';
+import SurfaceCard from '../components/SurfaceCard';
+import LoadingComponent from '../components/LoadingComponent';
+import ErrorModal from '../components/ErrorModal';
+import { theme } from '../theme';
+import { startNewGame, submitRound, searchPlayer } from '../api';
+import { useGameContext } from '../context/GameContext';
 
 export default function GameScreen({ route, navigation }) {
   const { mode, player1, player2, difficulty } = route.params || {};
+  const { score, addScore, p1Score, p2Score } = useGameContext(); // Note: Context'te p1Score/p2Score yoktu, yerel state'te tutalım.
+  
+  const [localP1Score, setLocalP1Score] = useState(0);
+  const [localP2Score, setLocalP2Score] = useState(0);
 
   const [guess1, setGuess1] = useState('');
   const [guess2, setGuess2] = useState('');
-  const [isResultModalVisible, setResultModalVisible] = useState(false);
   
-  // API State'leri
   const [isLoading, setIsLoading] = useState(true);
-  const [targetPlayer, setTargetPlayer] = useState(null);
-  const [targetStat, setTargetStat] = useState(null); // { name: 'Ast', value: 15, display: 'ASİST' }
-  const [roundResultData, setRoundResultData] = useState(null); // Backend dönen sonuç objesi
+  const [errorConfig, setErrorConfig] = useState({ visible: false, title: '', message: '' });
   
-  // Skorlar
-  const [p1Score, setP1Score] = useState(0);
-  const [p2Score, setP2Score] = useState(0);
+  const [targetPlayer, setTargetPlayer] = useState(null);
+  const [targetStat, setTargetStat] = useState(null);
+  const [roundResultData, setRoundResultData] = useState(null);
+  const [isResultModalVisible, setResultModalVisible] = useState(false);
 
-  // Ekrana ilk girildiğinde yeni bir raunt (oyuncu) çeker
+  const [selectionConfig, setSelectionConfig] = useState({ visible: false, playerKey: '', title: '', options: [] });
+  const [validatedP1, setValidatedP1] = useState(null);
+
   useEffect(() => {
     fetchNewRound();
   }, []);
+
+  const showError = (title, message) => {
+    setErrorConfig({ visible: true, title, message });
+  };
 
   const fetchNewRound = async () => {
     setIsLoading(true);
@@ -35,19 +48,15 @@ export default function GameScreen({ route, navigation }) {
       const player = response.target_player;
       setTargetPlayer(player);
       
-      // Sadece sayısıl / maç içi istatistikleri filtreleyelim
       const universalFeatures = ['Player', 'Age', 'Team', 'League', 'Pos', 'Zorluk_Seviyesi'];
       const availableStats = Object.keys(player).filter(k => !universalFeatures.includes(k) && player[k] !== null);
       
       if (availableStats.length > 0) {
-        // Rastgele bir istatistik seç
         const randomStat = availableStats[Math.floor(Math.random() * availableStats.length)];
-        
-        // Frontend'de güzel görünmesi için Türkçe isim sözlüğü
         const statNames = {
           'Gls': 'GOL', 'Ast': 'ASİST', 'SoT': 'İSABETLİ ŞUT',
           'Crs': 'ORTA', 'Int': 'PAS ARASI', 'TklW': 'KAZANILAN İKİLİ MÜCADELE',
-          'CS': 'GOL YEMEME (CLEAN SHEET)', 'Saves': 'KURTARIŞ', 'GA': 'YENİLEN GOL'
+          'CS': 'GOL YEMEME', 'Saves': 'KURTARIŞ', 'GA': 'YENİLEN GOL'
         };
         
         setTargetStat({
@@ -57,7 +66,7 @@ export default function GameScreen({ route, navigation }) {
         });
       }
     } catch (error) {
-      Alert.alert('Bağlantı Hatası', error.message || 'Sunucudan oyuncu getirilemedi.');
+      showError('Bağlantı Hatası', error.message || 'Sunucudan oyuncu getirilemedi.');
     } finally {
       setIsLoading(false);
     }
@@ -65,31 +74,117 @@ export default function GameScreen({ route, navigation }) {
 
   const showHint = () => {
     if (targetPlayer) {
-      Alert.alert('İpucu', `Takım: ${targetPlayer.Team}\nLig: ${targetPlayer.League}\nYaş: ${targetPlayer.Age}`);
+      showError('İpucu', `Takım: ${targetPlayer.Team}\nLig: ${targetPlayer.League}\nYaş: ${targetPlayer.Age}\nMevki: ${targetPlayer.Pos}`);
+    }
+  };
+
+  const executeSubmit = async (p1Name, p2Name) => {
+    try {
+      const result = await submitRound(targetPlayer.Player, targetStat.name, targetStat.value, p1Name, p2Name);
+      
+      setRoundResultData(result);
+      
+      if (result.round_winner === "Player 1") setLocalP1Score(prev => prev + 1);
+      else if (result.round_winner === "Player 2" && mode === 'multi') setLocalP2Score(prev => prev + 1);
+      
+      setResultModalVisible(true);
+    } catch (error) {
+      showError('Tahmin Hatası', error.message || 'Tahminler sunucuya gönderilirken hata oluştu.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelection = async (selectedName) => {
+    setSelectionConfig({ ...selectionConfig, visible: false });
+    setIsLoading(true);
+    
+    try {
+      if (selectionConfig.playerKey === 'p1') {
+        const p1Final = selectedName;
+        let p2Final = p1Final;
+        
+        if (mode === 'multi') {
+          const p2Search = await searchPlayer(guess2);
+          if (p2Search.match_type === 'none') {
+            throw new Error(`2. Oyuncu tahmini '${guess2}' veri setinde bulunamadı.`);
+          } else if (p2Search.match_type === 'multiple') {
+            setValidatedP1(p1Final);
+            setSelectionConfig({
+              visible: true,
+              playerKey: 'p2',
+              title: '2. Oyuncu: Kimi kastettiniz?',
+              options: p2Search.players
+            });
+            setIsLoading(false);
+            return;
+          }
+          p2Final = p2Search.players[0].name;
+        }
+        await executeSubmit(p1Final, p2Final);
+        
+      } else if (selectionConfig.playerKey === 'p2') {
+        await executeSubmit(validatedP1, selectedName);
+      }
+    } catch (error) {
+      showError('Tahmin Hatası', error.message);
+      setIsLoading(false);
     }
   };
 
   const handleShowResults = async () => {
-    if (!guess1 || !guess2) {
-      Alert.alert('Eksik Tahmin', 'Lütfen her iki oyuncu için de tahmin ettiğiniz futbolcu isimlerini giriniz.');
+    if (mode === 'single' && !guess1) {
+      showError('Eksik Tahmin', 'Lütfen tahmin ettiğiniz futbolcu ismini giriniz.');
+      return;
+    }
+    if (mode === 'multi' && (!guess1 || !guess2)) {
+      showError('Eksik Tahmin', 'Lütfen her iki oyuncu için de tahmin giriniz.');
       return;
     }
     
     setIsLoading(true);
     try {
-      // Backend'e istatistik adı, değeri ve oyuncuların tahminlerini gönderiyoruz
-      const result = await submitRound(targetStat.name, targetStat.value, guess1, guess2);
+      // 1. Oyuncu Kontrolü
+      const p1Search = await searchPlayer(guess1);
+      if (p1Search.match_type === 'none') {
+        throw new Error(`1. Oyuncu tahmini '${guess1}' veri setinde bulunamadı.`);
+      } else if (p1Search.match_type === 'multiple') {
+        setSelectionConfig({
+          visible: true,
+          playerKey: 'p1',
+          title: '1. Oyuncu: Kimi kastettiniz?',
+          options: p1Search.players
+        });
+        setIsLoading(false);
+        return;
+      }
       
-      setRoundResultData(result);
+      const p1Final = p1Search.players[0].name;
+      let p2Final = p1Final;
       
-      // Skoru Güncelle
-      if (result.round_winner === "Player 1") setP1Score(prev => prev + 1);
-      else if (result.round_winner === "Player 2") setP2Score(prev => prev + 1);
+      // 2. Oyuncu Kontrolü
+      if (mode === 'multi') {
+        const p2Search = await searchPlayer(guess2);
+        if (p2Search.match_type === 'none') {
+          throw new Error(`2. Oyuncu tahmini '${guess2}' veri setinde bulunamadı.`);
+        } else if (p2Search.match_type === 'multiple') {
+          setValidatedP1(p1Final);
+          setSelectionConfig({
+            visible: true,
+            playerKey: 'p2',
+            title: '2. Oyuncu: Kimi kastettiniz?',
+            options: p2Search.players
+          });
+          setIsLoading(false);
+          return;
+        }
+        p2Final = p2Search.players[0].name;
+      }
       
-      setResultModalVisible(true);
+      await executeSubmit(p1Final, p2Final);
+      
     } catch (error) {
-      Alert.alert('Tahmin Hatası', error.message || 'Tahminler sunucuya gönderilirken hata oluştu.');
-    } finally {
+      showError('Tahmin Hatası', error.message || 'Tahminler kontrol edilirken hata oluştu.');
       setIsLoading(false);
     }
   };
@@ -101,74 +196,129 @@ export default function GameScreen({ route, navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Üst Kısım: Scoreboard */}
-      <View style={styles.scoreboard}>
-        <Text style={styles.scoreText}>
-          KATEGORİ: {isLoading || !targetStat ? 'YÜKLENİYOR...' : targetStat.display}
-        </Text>
-        <Text style={styles.scoreText}>SKOR: {p1Score}-{p2Score}</Text>
-      </View>
+      <ErrorModal 
+        visible={errorConfig.visible} 
+        title={errorConfig.title} 
+        message={errorConfig.message} 
+        onClose={() => setErrorConfig({ ...errorConfig, visible: false })} 
+      />
 
-      {/* Orta Kısım: Taktik Tahtası (Oyun Alanı) */}
-      <View style={styles.tacticBoard}>
-        {isLoading ? (
-          <ActivityIndicator size="large" color="#FFFFFF" />
-        ) : (
-          <Text style={styles.playerName}>
-            {targetPlayer ? targetPlayer.Player.toUpperCase() : 'OYUNCU BULUNAMADI'}
-          </Text>
-        )}
-      </View>
+      <KeyboardAvoidingView style={styles.flex1} behavior="padding" keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 100}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+            
+            {/* Scoreboard */}
+            <View style={styles.scoreboard}>
+              <Text style={styles.categoryText}>
+                HEDEF: {isLoading || !targetStat ? 'YÜKLENİYOR...' : targetStat.display}
+              </Text>
+              {mode === 'multi' && (
+                <Text style={styles.scoreText}>SKOR: {localP1Score} - {localP2Score}</Text>
+              )}
+              {mode === 'single' && (
+                <Text style={styles.scoreText}>DOĞRU: {localP1Score}</Text>
+              )}
+            </View>
 
-      {/* Alt Kısım: Tahmin ve İpucu Alanı */}
-      <View style={styles.guessSection}>
-        {/* İpucu Butonu */}
-        <TouchableOpacity style={styles.hintButton} onPress={showHint} activeOpacity={0.8} disabled={isLoading}>
-          <Text style={styles.hintText}>İPUCU AL</Text>
-        </TouchableOpacity>
+            {/* Oyun Alanı */}
+            <SurfaceCard style={styles.playArea}>
+              {isLoading ? (
+                <LoadingComponent message="Oyuncu Seçiliyor..." />
+              ) : (
+                <Text style={styles.playerName}>
+                  {targetPlayer ? targetPlayer.Player.toUpperCase() : 'OYUNCU BULUNAMADI'}
+                </Text>
+              )}
+            </SurfaceCard>
 
-        {/* Yan Yana Tahmin Kutuları */}
-        <View style={styles.inputsRow}>
-          <TextInput
-            style={styles.guessInput}
-            placeholder={`${player1 || '1. Oyuncu'} Tahmini`}
-            placeholderTextColor="#9CA3AF"
-            value={guess1}
-            onChangeText={setGuess1}
-            editable={!isLoading}
-          />
-          <TextInput
-            style={styles.guessInput}
-            placeholder={`${player2 || '2. Oyuncu'} Tahmini`}
-            placeholderTextColor="#9CA3AF"
-            value={guess2}
-            onChangeText={setGuess2}
-            editable={!isLoading}
-          />
-        </View>
-      </View>
+            {/* Tahmin Alanı */}
+            <View style={styles.guessSection}>
+              <PrimaryButton 
+                title="İPUCU AL" 
+                onPress={showHint} 
+                disabled={isLoading} 
+                style={styles.hintButton}
+              />
 
-      {/* En Alt: Sonuçları Gör Butonu */}
-      <View style={styles.footer}>
-        <CustomButton 
-          title={isLoading ? "BEKLEYİNİZ..." : "SONUÇLARI GÖR"} 
-          onPress={handleShowResults} 
-          style={styles.resultButton}
-        />
-      </View>
+              <View style={styles.inputsContainer}>
+                {mode === 'single' ? (
+                  <CustomInput
+                    placeholder="Tahmininiz..."
+                    value={guess1}
+                    onChangeText={setGuess1}
+                    editable={!isLoading}
+                  />
+                ) : (
+                  <>
+                    <CustomInput
+                      label={`${player1 || '1. Oyuncu'} Tahmini`}
+                      placeholder="1. Oyuncu Tahmini"
+                      value={guess1}
+                      onChangeText={setGuess1}
+                      editable={!isLoading}
+                    />
+                    <CustomInput
+                      label={`${player2 || '2. Oyuncu'} Tahmini`}
+                      placeholder="2. Oyuncu Tahmini"
+                      value={guess2}
+                      onChangeText={setGuess2}
+                      editable={!isLoading}
+                    />
+                  </>
+                )}
+              </View>
+            </View>
 
-      {/* Sonuç Tahtası Modalı */}
-      <Modal
-        visible={isResultModalVisible}
-        transparent={true}
-        animationType="slide"
-      >
+            {/* Alt Buton */}
+            <View style={styles.footer}>
+              <PrimaryButton 
+                title={isLoading ? "BEKLEYİNİZ..." : "SONUÇLARI GÖR"} 
+                onPress={handleShowResults}
+                disabled={isLoading}
+              />
+            </View>
+
+          </ScrollView>
+        </TouchableWithoutFeedback>
+      </KeyboardAvoidingView>
+
+      {/* Oyuncu Seçim Modalı */}
+      <Modal visible={selectionConfig.visible} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <SurfaceCard style={styles.modalCard}>
+            <Text style={styles.modalTitle}>{selectionConfig.title}</Text>
+            <Text style={styles.modalSubtitle}>Birden fazla eşleşme bulundu. Hangisini kastettiniz?</Text>
+            
+            <View style={{ width: '100%', marginVertical: 10 }}>
+              {selectionConfig.options.map((opt, index) => (
+                <PrimaryButton 
+                  key={index}
+                  title={`${opt.name}`}
+                  onPress={() => handleSelection(opt.name)}
+                  type="info"
+                  style={{ marginBottom: 10 }}
+                />
+              ))}
+            </View>
+            
+            <PrimaryButton 
+              title="İPTAL" 
+              onPress={() => setSelectionConfig({ ...selectionConfig, visible: false })}
+              type="danger" 
+              style={{ marginTop: 10 }} 
+            />
+          </SurfaceCard>
+        </View>
+      </Modal>
+
+      {/* Sonuç Modalı */}
+      <Modal visible={isResultModalVisible} transparent={true} animationType="fade">
+        <View style={styles.modalOverlay}>
+          <SurfaceCard style={styles.modalCard}>
             <Text style={styles.modalTitle}>SONUÇ TAHTASI</Text>
             
             {roundResultData && (
-              <>
+              <View style={styles.modalContent}>
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Hedef ({roundResultData.target_stat_name}):</Text>
                   <Text style={styles.resultValue}>{roundResultData.target_stat_value}</Text>
@@ -181,28 +331,29 @@ export default function GameScreen({ route, navigation }) {
                   <Text style={styles.resultValue}>{roundResultData.player1.stat_value} (Fark: {roundResultData.player1.difference})</Text>
                 </View>
 
-                <View style={styles.resultRow}>
-                  <Text style={styles.resultLabel}>{player2 || '2. Oyuncu'} ({roundResultData.player2.name}):</Text>
-                  <Text style={styles.resultValue}>{roundResultData.player2.stat_value} (Fark: {roundResultData.player2.difference})</Text>
-                </View>
+                {mode === 'multi' && (
+                  <View style={styles.resultRow}>
+                    <Text style={styles.resultLabel}>{player2 || '2. Oyuncu'} ({roundResultData.player2.name}):</Text>
+                    <Text style={styles.resultValue}>{roundResultData.player2.stat_value} (Fark: {roundResultData.player2.difference})</Text>
+                  </View>
+                )}
 
                 <View style={styles.divider} />
 
                 <Text style={styles.winnerText}>
-                  {roundResultData.round_winner === "Tie" ? "BERABERE!" : 
-                   roundResultData.round_winner === "Player 1" ? `${player1 || '1. OYUNCU'} KAZANDI!` : 
-                   `${player2 || '2. OYUNCU'} KAZANDI!`}
+                  {mode === 'single' ? (
+                    roundResultData.round_winner === "Player 1" ? "TEBRİKLER, BİLDİNİZ!" : "MAALESEF, BİLEMEDİNİZ."
+                  ) : (
+                    roundResultData.round_winner === "Tie" ? "BERABERE!" : 
+                    roundResultData.round_winner === "Player 1" ? `${player1 || '1. OYUNCU'} KAZANDI!` : 
+                    `${player2 || '2. OYUNCU'} KAZANDI!`
+                  )}
                 </Text>
-              </>
+              </View>
             )}
 
-            <TouchableOpacity 
-              style={styles.closeButton}
-              onPress={handleNextRound}
-            >
-              <Text style={styles.closeButtonText}>Sonraki Tura Geç</Text>
-            </TouchableOpacity>
-          </View>
+            <PrimaryButton title="SONRAKİ TUR" onPress={handleNextRound} style={styles.nextButton} />
+          </SurfaceCard>
         </View>
       </Modal>
 
@@ -211,46 +362,120 @@ export default function GameScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F3F4F6' },
-  scoreboard: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: '#1E3A8A', paddingVertical: 16, paddingHorizontal: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 6,
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.background,
   },
-  scoreText: { color: '#FBBF24', fontSize: 16, fontWeight: 'bold', letterSpacing: 1 },
-  tacticBoard: {
-    flex: 1, backgroundColor: '#166534', margin: 20, borderRadius: 16, borderWidth: 3, borderColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 6,
+  flex1: { flex: 1 },
+  scrollContainer: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+  },
+  scoreboard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: theme.colors.surfaceSolid,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  categoryText: {
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.lg,
+    color: theme.colors.textLight,
+  },
+  scoreText: {
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.xl,
+    color: theme.colors.primary,
+  },
+  playArea: {
+    margin: theme.spacing.lg,
+    height: 150,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderColor: theme.colors.primary,
+    borderWidth: 1,
   },
   playerName: {
-    color: '#FFFFFF', fontSize: 32, fontWeight: '900', textAlign: 'center', letterSpacing: 2,
-    textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4, paddingHorizontal: 10,
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.xxl,
+    color: theme.colors.primary,
+    textAlign: 'center',
+    letterSpacing: 2,
+    textShadowColor: 'rgba(251, 191, 36, 0.4)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 10,
   },
-  guessSection: { paddingHorizontal: 20, marginBottom: 30, alignItems: 'center' },
+  guessSection: {
+    paddingHorizontal: theme.spacing.lg,
+    alignItems: 'center',
+  },
   hintButton: {
-    backgroundColor: '#FACC15', paddingVertical: 10, paddingHorizontal: 24, borderRadius: 20, marginBottom: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4,
+    width: '50%',
+    marginBottom: theme.spacing.md,
   },
-  hintText: { color: '#1F2937', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
-  inputsRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', gap: 12 },
-  guessInput: {
-    flex: 1, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: '#E5E7EB', borderRadius: 12,
-    paddingVertical: 14, paddingHorizontal: 12, textAlign: 'center', fontSize: 16, color: '#1F2937', fontWeight: '600',
+  inputsContainer: {
+    width: '100%',
   },
-  footer: { paddingHorizontal: 20, marginBottom: 40, alignItems: 'center' },
-  resultButton: { width: '100%' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.7)', justifyContent: 'center', alignItems: 'center' },
+  footer: {
+    padding: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  modalCard: {
+    width: '100%',
+    padding: theme.spacing.xl,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.xxl,
+    color: theme.colors.primary,
+    marginBottom: theme.spacing.lg,
+  },
   modalContent: {
-    width: '90%', backgroundColor: '#FFFFFF', borderRadius: 20, padding: 25, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 15, elevation: 15,
+    width: '100%',
   },
-  modalTitle: { fontSize: 26, fontWeight: '900', color: '#1E3A8A', marginBottom: 20, letterSpacing: 1 },
-  resultRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginVertical: 8 },
-  resultLabel: { fontSize: 14, color: '#4B5563', fontWeight: '600', flex: 1 },
-  resultValue: { fontSize: 16, color: '#111827', fontWeight: 'bold', flex: 1, textAlign: 'right' },
-  divider: { width: '100%', height: 1, backgroundColor: '#E5E7EB', marginVertical: 15 },
-  winnerText: { fontSize: 22, fontWeight: 'bold', color: '#166534', marginVertical: 15, textAlign: 'center' },
-  closeButton: { marginTop: 10, backgroundColor: '#FBBF24', paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25, width: '100%' },
-  closeButtonText: { color: '#1E3A8A', fontSize: 16, fontWeight: 'bold', textAlign: 'center' }
+  resultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginVertical: theme.spacing.xs,
+  },
+  resultLabel: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.md,
+    color: theme.colors.textMuted,
+    flex: 1,
+  },
+  resultValue: {
+    fontFamily: theme.typography.fontFamily.bodyBold,
+    fontSize: theme.typography.sizes.md,
+    color: theme.colors.textLight,
+    flex: 1,
+    textAlign: 'right',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    marginVertical: theme.spacing.md,
+  },
+  winnerText: {
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.xl,
+    color: theme.colors.success,
+    textAlign: 'center',
+    marginVertical: theme.spacing.md,
+  },
+  nextButton: {
+    marginTop: theme.spacing.lg,
+  }
 });

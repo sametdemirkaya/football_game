@@ -1,94 +1,99 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ImageBackground } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import CustomButton from '../components/CustomButton';
+import PrimaryButton from '../components/PrimaryButton';
+import SurfaceCard from '../components/SurfaceCard';
+import { theme } from '../theme';
 
 export default function HomeScreen({ navigation }) {
   return (
-    <ImageBackground
-      source={require('../../assets/background.png')}
-      style={styles.backgroundImage}
-      resizeMode="cover"
-      blurRadius={0}
-    >
-      <SafeAreaView style={styles.container}>
-
-        {/* Üst Kısım: Sadece Metin Olarak Yeniden Tasarlanan Başlık */}
-        <View style={styles.topSection}>
-          <View style={styles.titleContainer}>
-            <Ionicons name="football" size={32} color="#FFD700" style={styles.icon} />
-            <Text style={styles.title} adjustsFontSizeToFit numberOfLines={1}>İSTATİSTİK ARENASI</Text>
-            <Ionicons name="football" size={32} color="#FFD700" style={styles.icon} />
-          </View>
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={theme.colors.background} />
+      
+      <View style={styles.content}>
+        {/* Üst Kısım: Başlık ve Logo */}
+        <View style={styles.headerSection}>
+          <Ionicons name="football-outline" size={80} color={theme.colors.primary} style={styles.logo} />
+          <Text style={styles.title}>İSTATİSTİK ARENASI</Text>
+          <Text style={styles.subtitle}>FUTBOL ZEKA OYUNU</Text>
         </View>
 
-        {/* Alt Kısım: Menü Butonları */}
-        <View style={styles.bottomSection}>
-          <CustomButton
+        {/* Alt Kısım: Menü Seçenekleri */}
+        <SurfaceCard style={styles.menuCard}>
+          <Text style={styles.menuTitle}>OYUN MODUNU SEÇ</Text>
+          
+          <PrimaryButton
             title="TEK OYUNCULU"
             onPress={() => navigation.navigate('PlayerSetup', { mode: 'single' })}
+            style={styles.menuButton}
           />
-          <CustomButton
+          
+          <PrimaryButton
             title="ÇİFT OYUNCULU"
             onPress={() => navigation.navigate('PlayerSetup', { mode: 'multi' })}
+            style={styles.menuButton}
           />
-          <CustomButton
+          
+          <PrimaryButton
             title="AYARLAR"
             onPress={() => navigation.navigate('Settings')}
+            style={styles.menuButton}
           />
-        </View>
-
-      </SafeAreaView>
-    </ImageBackground>
+        </SurfaceCard>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  backgroundImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
   container: {
     flex: 1,
+    backgroundColor: theme.colors.background,
   },
-  topSection: {
-    flex: 0.45,
-    justifyContent: 'flex-start',
+  content: {
+    flex: 1,
+    justifyContent: 'space-evenly',
+    paddingHorizontal: theme.spacing.lg,
+  },
+  headerSection: {
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingTop: 70, // Ekranda stadyumun gökyüzü/çatı kısmına şık bir şekilde oturması için
+    marginTop: theme.spacing.xl,
   },
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    // Eskiden olan tüm o kaba lacivert arka plan kutusunu ve sınır çizgilerini SİLDİK.
-    // Başlık artık tamamen bağımsız ve havada (stadyum üzerinde) süzülecek.
+  logo: {
+    marginBottom: theme.spacing.md,
+    textShadowColor: 'rgba(251, 191, 36, 0.3)', // Altın sarısı glow
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
   },
-  icon: {
-    marginHorizontal: 8,
-    textShadowColor: 'rgba(0, 0, 0, 1)', // İkonların arka planda kaybolmaması için sert siyah gölge
+  title: {
+    fontFamily: theme.typography.fontFamily.heading,
+    fontSize: theme.typography.sizes.xxxl,
+    color: theme.colors.primary,
+    textAlign: 'center',
+    letterSpacing: 2,
+    textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 2, height: 2 },
     textShadowRadius: 4,
   },
-  title: {
-    flex: 1,
-    fontSize: 34, // Çok daha büyük, heybetli bir oyun başlığı boyutu
-    fontWeight: '900', // En kalın, spor temasına uygun font ağırlığı
-    color: '#FFD700', // Altın Sarısı (Buton çerçevesi ile bütünlük sağlar)
-    letterSpacing: 2,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 1)', // Yazının stadyum üzerinde net okunması için çok koyu bir gölge
-    textShadowOffset: { width: 3, height: 3 },
-    textShadowRadius: 6,
+  subtitle: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.sizes.md,
+    color: theme.colors.textMuted,
+    letterSpacing: 4,
+    marginTop: theme.spacing.xs,
   },
-  bottomSection: {
-    flex: 0.55,
-    justifyContent: 'center',
+  menuCard: {
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingVertical: theme.spacing.xl,
+  },
+  menuTitle: {
+    fontFamily: theme.typography.fontFamily.bodyBold,
+    color: theme.colors.textMuted,
+    fontSize: theme.typography.sizes.sm,
+    marginBottom: theme.spacing.lg,
+    letterSpacing: 1.5,
+  },
+  menuButton: {
+    marginBottom: theme.spacing.md,
   }
 });
