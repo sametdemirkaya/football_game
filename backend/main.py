@@ -91,10 +91,10 @@ UNIVERSAL_FEATURES = ['Player', 'Age', 'Team', 'League', 'Pos', 'Zorluk_Seviyesi
 
 # Futboldaki ana mevkilere göre seçilen oyuncunun öne çıkan spesifik istatistikleri.
 POSITION_SPECIFIC_FEATURES = {
-    'FW': ['Gls', 'Ast', 'SoT'],   # Forvet (Gol, Asist, İsabetli Şut)
-    'MF': ['Ast', 'Crs', 'Int'],   # Orta Saha (Asist, Orta, Pas Arası)
-    'DF': ['TklW', 'Int', 'CrdY'], # Defans (Kazanılan İkili Mücadele, Pas Arası, Sarı Kart)
-    'GK': ['Saves', 'CS', 'GA']    # Kaleci (Kurtarış, Gol Yememe, Yenilen Gol)
+    'FW': ['Gls', 'Ast', 'SoT','Age','CrdY'],   # Forvet (Gol, Asist, İsabetli Şut)
+    'MF': ['Ast', 'Crs', 'Int','Age','CrdY','Gls','TklW','SoT'],   # Orta Saha (Asist, Orta, Pas Arası)
+    'DF': ['TklW', 'Int', 'CrdY','Age'], # Defans (Kazanılan İkili Mücadele, Pas Arası, Sarı Kart)
+    'GK': ['Saves', 'CS', 'GA','Age']    # Kaleci (Kurtarış, Gol Yememe, Yenilen Gol)
 }
 
 @app.get("/start-game")
