@@ -375,7 +375,7 @@ export default function GameScreen({ route, navigation }) {
               <Text style={styles.modalTitle}>SONUÇ TAHTASI</Text>
             )}
             
-            {roundResultData && !isGameOver && (
+            {roundResultData && (
               <View style={styles.modalContent}>
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Hedef ({roundResultData.target_stat_name}):</Text>
@@ -398,15 +398,17 @@ export default function GameScreen({ route, navigation }) {
 
                 <View style={styles.divider} />
 
-                <Text style={styles.winnerText}>
-                  {mode === 'single' ? (
-                    roundResultData.round_winner === "Player 1" ? "TEBRİKLER, BİLDİNİZ!" : "MAALESEF, BİLEMEDİNİZ."
-                  ) : (
-                    roundResultData.round_winner === "Tie" ? "BERABERE!" : 
-                    roundResultData.round_winner === "Player 1" ? `${player1 || '1. OYUNCU'} KAZANDI!` : 
-                    `${player2 || '2. OYUNCU'} KAZANDI!`
-                  )}
-                </Text>
+                {!isGameOver && (
+                  <Text style={styles.winnerText}>
+                    {mode === 'single' ? (
+                      roundResultData.round_winner === "Player 1" ? "TEBRİKLER, BİLDİNİZ!" : "MAALESEF, BİLEMEDİNİZ."
+                    ) : (
+                      roundResultData.round_winner === "Tie" ? "BERABERE!" : 
+                      roundResultData.round_winner === "Player 1" ? `${player1 || '1. OYUNCU'} KAZANDI!` : 
+                      `${player2 || '2. OYUNCU'} KAZANDI!`
+                    )}
+                  </Text>
+                )}
               </View>
             )}
 
