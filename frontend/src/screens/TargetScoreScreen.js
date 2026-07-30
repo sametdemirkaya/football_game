@@ -5,52 +5,45 @@ import SurfaceCard from '../components/SurfaceCard';
 import { theme } from '../theme';
 import { useGameContext } from '../context/GameContext';
 
-export default function DifficultyScreen({ route, navigation }) {
-  const { mode, player1, player2 } = route.params || {};
-  const { setDifficulty } = useGameContext();
+export default function TargetScoreScreen({ route, navigation }) {
+  const { mode, player1, player2, difficulty } = route.params || {};
+  const { setTargetScore } = useGameContext();
 
-  const handleDifficultySelect = (selectedDifficulty) => {
-    // Multiplayer modundaysa Hedef Skor sayfasına, Single ise direkt Oyuna git
-    if (mode === 'multi') {
-      navigation.navigate('TargetScore', {
-        mode,
-        player1,
-        player2,
-        difficulty: selectedDifficulty
-      });
-    } else {
-      navigation.navigate('Game', {
-        mode,
-        player1,
-        player2,
-        difficulty: selectedDifficulty
-      });
-    }
+  const handleScoreSelect = (score) => {
+    setTargetScore(score);
+    
+    // Oyun ekranına geçiş yap
+    navigation.navigate('Game', {
+      mode,
+      player1,
+      player2,
+      difficulty
+    });
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.innerContainer}>
-        <Text style={styles.title}>ZORLUK SEÇİMİ</Text>
+        <Text style={styles.title}>HEDEF SKOR</Text>
         
         <SurfaceCard style={styles.card}>
-          <Text style={styles.subtitle}>Oyun zorluğunu belirleyin. Zor seviyelerde daha az bilinen oyuncular sorulacaktır.</Text>
+          <Text style={styles.subtitle}>Oyun kaç puanda bitsin?</Text>
           
           <View style={styles.buttonContainer}>
             <PrimaryButton 
-              title="KOLAY" 
-              onPress={() => handleDifficultySelect('Kolay')} 
+              title="ALTIN GOL (İlk Bilen Kazanır)" 
+              onPress={() => handleScoreSelect(1)} 
               type="info"
             />
             <PrimaryButton 
-              title="ORTA" 
-              onPress={() => handleDifficultySelect('Orta')} 
+              title="DERBİ MODU (3 Olan Kazanır)" 
+              onPress={() => handleScoreSelect(3)} 
               type="primary"
             />
             <PrimaryButton 
-              title="ZOR" 
-              onPress={() => handleDifficultySelect('Zor')} 
-              type="danger" // Kırmızı/Hata rengi ile daha zor olduğunu vurgulamak için
+              title="90 DAKİKA (5 Olan Kazanır)" 
+              onPress={() => handleScoreSelect(5)} 
+              type="danger" 
             />
           </View>
         </SurfaceCard>
@@ -82,11 +75,10 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.sizes.md,
-    color: theme.colors.textMuted,
+    fontSize: theme.typography.sizes.lg,
+    color: theme.colors.textLight,
     textAlign: 'center',
     marginBottom: theme.spacing.xl,
-    lineHeight: 22,
   },
   card: {
     paddingVertical: theme.spacing.xl,

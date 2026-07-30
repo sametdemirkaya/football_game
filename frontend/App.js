@@ -15,6 +15,7 @@ import PlayerSetupScreen from './src/screens/PlayerSetupScreen';
 import GameScreen from './src/screens/GameScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import DifficultyScreen from './src/screens/DifficultyScreen';
+import TargetScoreScreen from './src/screens/TargetScoreScreen';
 
 // Sıçrama (Splash) ekranının fontlar yüklenene kadar kapanmamasını sağlar
 SplashScreen.preventAutoHideAsync();
@@ -56,6 +57,7 @@ export default function App() {
             <Stack.Screen name="Home" component={HomeScreen} options={{ title: 'ANA MENÜ' }} />
             <Stack.Screen name="PlayerSetup" component={PlayerSetupScreen} options={{ title: 'OYUNCU KURULUMU' }} />
             <Stack.Screen name="Difficulty" component={DifficultyScreen} options={{ title: 'ZORLUK SEÇİMİ' }} />
+            <Stack.Screen name="TargetScore" component={TargetScoreScreen} options={{ title: 'HEDEF SKOR' }} />
             <Stack.Screen name="Game" component={GameScreen} options={{ title: 'OYUN' }} />
             <Stack.Screen name="Settings" component={SettingsScreen} options={{ title: 'AYARLAR' }} />
           </Stack.Navigator>

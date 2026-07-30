@@ -8,10 +8,11 @@ import ErrorModal from '../components/ErrorModal';
 import { theme } from '../theme';
 import { startNewGame, submitRound, searchPlayer } from '../api';
 import { useGameContext } from '../context/GameContext';
+import { getGameOverTrashTalk } from '../utils/trashTalk'; // Sadece oyun sonu eklendi
 
 export default function GameScreen({ route, navigation }) {
   const { mode, player1, player2, difficulty } = route.params || {};
-  const { score, addScore, p1Score, p2Score } = useGameContext(); // Note: Context'te p1Score/p2Score yoktu, yerel state'te tutalım.
+  const { targetScore } = useGameContext(); // Hedef skor (sadece multi için)
   
   const [localP1Score, setLocalP1Score] = useState(0);
   const [localP2Score, setLocalP2Score] = useState(0);
@@ -26,6 +27,11 @@ export default function GameScreen({ route, navigation }) {
   const [targetStat, setTargetStat] = useState(null);
   const [roundResultData, setRoundResultData] = useState(null);
   const [isResultModalVisible, setResultModalVisible] = useState(false);
+
+  // Game Over State (Sadece Multi için)
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [gameOverTrashTalk, setGameOverTrashTalk] = useState('');
+  const [winnerName, setWinnerName] = useState('');
 
   const [selectionConfig, setSelectionConfig] = useState({ visible: false, playerKey: '', title: '', options: [] });
   const [validatedP1, setValidatedP1] = useState(null);
@@ -84,10 +90,35 @@ export default function GameScreen({ route, navigation }) {
       
       setRoundResultData(result);
       
-      if (result.round_winner === "Player 1") setLocalP1Score(prev => prev + 1);
-      else if (result.round_winner === "Player 2" && mode === 'multi') setLocalP2Score(prev => prev + 1);
+      let newP1Score = localP1Score;
+      let newP2Score = localP2Score;
+
+      if (result.round_winner === "Player 1") {
+        newP1Score += 1;
+        setLocalP1Score(newP1Score);
+      } else if (result.round_winner === "Player 2" && mode === 'multi') {
+        newP2Score += 1;
+        setLocalP2Score(newP2Score);
+      }
       
       setResultModalVisible(true);
+
+      // Hedef skora ulaşıldı mı kontrolü (SADECE MULTI MOD İÇİN)
+      if (mode === 'multi' && (newP1Score >= targetScore || newP2Score >= targetScore)) {
+        let overWinner = '';
+        if (newP1Score >= targetScore && newP2Score >= targetScore) {
+          overWinner = 'Tie';
+        } else if (newP1Score >= targetScore) {
+          overWinner = player1 || '1. OYUNCU';
+        } else {
+          overWinner = player2 || '2. OYUNCU';
+        }
+        
+        setWinnerName(overWinner);
+        setGameOverTrashTalk(getGameOverTrashTalk(overWinner === 'Tie'));
+        setIsGameOver(true);
+      }
+
     } catch (error) {
       showError('Tahmin Hatası', error.message || 'Tahminler sunucuya gönderilirken hata oluştu.');
     } finally {
@@ -191,7 +222,23 @@ export default function GameScreen({ route, navigation }) {
   
   const handleNextRound = () => {
     setResultModalVisible(false);
+    if (!isGameOver) {
+      fetchNewRound();
+    }
+  };
+
+  const handleRematch = () => {
+    setLocalP1Score(0);
+    setLocalP2Score(0);
+    setIsGameOver(false);
+    setResultModalVisible(false);
     fetchNewRound();
+  };
+
+  const handleGoHome = () => {
+    setResultModalVisible(false);
+    setIsGameOver(false);
+    navigation.navigate('Home');
   };
 
   return (
@@ -209,11 +256,16 @@ export default function GameScreen({ route, navigation }) {
             
             {/* Scoreboard */}
             <View style={styles.scoreboard}>
-              <Text style={styles.categoryText}>
-                HEDEF: {isLoading || !targetStat ? 'YÜKLENİYOR...' : targetStat.display}
-              </Text>
+              <View style={{ flex: 1, paddingRight: 10 }}>
+                <Text style={styles.categoryText} numberOfLines={2}>
+                  HEDEF: {isLoading || !targetStat ? 'YÜKLENİYOR...' : targetStat.display}
+                </Text>
+                {mode === 'multi' && (
+                  <Text style={styles.targetScoreText}>({targetScore} Olan Kazanır)</Text>
+                )}
+              </View>
               {mode === 'multi' && (
-                <Text style={styles.scoreText}>SKOR: {localP1Score} - {localP2Score}</Text>
+                <Text style={styles.scoreText}>SKOR: {localP1Score}-{localP2Score}</Text>
               )}
               {mode === 'single' && (
                 <Text style={styles.scoreText}>DOĞRU: {localP1Score}</Text>
@@ -237,6 +289,7 @@ export default function GameScreen({ route, navigation }) {
                 title="İPUCU AL" 
                 onPress={showHint} 
                 disabled={isLoading} 
+                type="primary"
                 style={styles.hintButton}
               />
 
@@ -315,9 +368,14 @@ export default function GameScreen({ route, navigation }) {
       <Modal visible={isResultModalVisible} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <SurfaceCard style={styles.modalCard}>
-            <Text style={styles.modalTitle}>SONUÇ TAHTASI</Text>
             
-            {roundResultData && (
+            {isGameOver ? (
+              <Text style={styles.gameOverTitle}>ŞAMPİYON</Text>
+            ) : (
+              <Text style={styles.modalTitle}>SONUÇ TAHTASI</Text>
+            )}
+            
+            {roundResultData && !isGameOver && (
               <View style={styles.modalContent}>
                 <View style={styles.resultRow}>
                   <Text style={styles.resultLabel}>Hedef ({roundResultData.target_stat_name}):</Text>
@@ -352,7 +410,23 @@ export default function GameScreen({ route, navigation }) {
               </View>
             )}
 
-            <PrimaryButton title="SONRAKİ TUR" onPress={handleNextRound} style={styles.nextButton} />
+            {isGameOver && (
+              <View style={styles.modalContent}>
+                <Text style={styles.winnerText}>{winnerName === 'Tie' ? 'BERABERE' : `${winnerName} KAZANDI!`}</Text>
+                <Text style={styles.trashTalkText}>"{gameOverTrashTalk}"</Text>
+                <Text style={styles.finalScoreText}>Maç Sonucu: {localP1Score} - {localP2Score}</Text>
+              </View>
+            )}
+
+            {isGameOver ? (
+              <View style={{ width: '100%', marginTop: theme.spacing.lg }}>
+                <PrimaryButton title="RÖVANŞ OYNA" onPress={handleRematch} type="info" />
+                <PrimaryButton title="ANA MENÜYE DÖN" onPress={handleGoHome} style={{ marginTop: 10 }} type="primary" />
+              </View>
+            ) : (
+              <PrimaryButton title="SONRAKİ TUR" onPress={handleNextRound} style={styles.nextButton} />
+            )}
+            
           </SurfaceCard>
         </View>
       </Modal>
@@ -362,120 +436,39 @@ export default function GameScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.colors.background,
-  },
+  container: { flex: 1, backgroundColor: theme.colors.background },
   flex1: { flex: 1 },
-  scrollContainer: {
-    flexGrow: 1,
-    justifyContent: 'space-between',
-  },
+  scrollContainer: { flexGrow: 1, justifyContent: 'space-between' },
   scoreboard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: theme.colors.surfaceSolid,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: theme.colors.surfaceSolid, paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)',
   },
-  categoryText: {
-    fontFamily: theme.typography.fontFamily.heading,
-    fontSize: theme.typography.sizes.lg,
-    color: theme.colors.textLight,
-  },
-  scoreText: {
-    fontFamily: theme.typography.fontFamily.heading,
-    fontSize: theme.typography.sizes.xl,
-    color: theme.colors.primary,
-  },
-  playArea: {
-    margin: theme.spacing.lg,
-    height: 150,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderColor: theme.colors.primary,
-    borderWidth: 1,
-  },
+  categoryText: { fontFamily: theme.typography.fontFamily.heading, fontSize: theme.typography.sizes.lg, color: theme.colors.textLight },
+  targetScoreText: { fontFamily: theme.typography.fontFamily.bodyBold, fontSize: theme.typography.sizes.sm, color: '#38BDF8', marginTop: 2 },
+  scoreText: { fontFamily: theme.typography.fontFamily.heading, fontSize: theme.typography.sizes.xxl, color: theme.colors.primary },
+  playArea: { margin: theme.spacing.lg, height: 150, justifyContent: 'center', alignItems: 'center', borderColor: theme.colors.primary, borderWidth: 1 },
   playerName: {
-    fontFamily: theme.typography.fontFamily.heading,
-    fontSize: theme.typography.sizes.xxl,
-    color: theme.colors.primary,
-    textAlign: 'center',
-    letterSpacing: 2,
-    textShadowColor: 'rgba(251, 191, 36, 0.4)',
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    fontFamily: theme.typography.fontFamily.heading, fontSize: theme.typography.sizes.xxl,
+    color: theme.colors.primary, textAlign: 'center', letterSpacing: 2,
+    textShadowColor: 'rgba(251, 191, 36, 0.4)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10,
   },
-  guessSection: {
-    paddingHorizontal: theme.spacing.lg,
-    alignItems: 'center',
-  },
-  hintButton: {
-    width: '50%',
-    marginBottom: theme.spacing.md,
-  },
-  inputsContainer: {
-    width: '100%',
-  },
-  footer: {
-    padding: theme.spacing.lg,
-    marginTop: theme.spacing.md,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: theme.spacing.lg,
-  },
-  modalCard: {
-    width: '100%',
-    padding: theme.spacing.xl,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontFamily: theme.typography.fontFamily.heading,
-    fontSize: theme.typography.sizes.xxl,
-    color: theme.colors.primary,
-    marginBottom: theme.spacing.lg,
-  },
-  modalContent: {
-    width: '100%',
-  },
-  resultRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: theme.spacing.xs,
-  },
-  resultLabel: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.sizes.md,
-    color: theme.colors.textMuted,
-    flex: 1,
-  },
-  resultValue: {
-    fontFamily: theme.typography.fontFamily.bodyBold,
-    fontSize: theme.typography.sizes.md,
-    color: theme.colors.textLight,
-    flex: 1,
-    textAlign: 'right',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    marginVertical: theme.spacing.md,
-  },
-  winnerText: {
-    fontFamily: theme.typography.fontFamily.heading,
-    fontSize: theme.typography.sizes.xl,
-    color: theme.colors.success,
-    textAlign: 'center',
-    marginVertical: theme.spacing.md,
-  },
-  nextButton: {
-    marginTop: theme.spacing.lg,
-  }
+  guessSection: { paddingHorizontal: theme.spacing.lg, alignItems: 'center' },
+  hintButton: { width: '50%', marginBottom: theme.spacing.md },
+  inputsContainer: { width: '100%' },
+  footer: { padding: theme.spacing.lg, marginTop: theme.spacing.md },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', alignItems: 'center', padding: theme.spacing.lg },
+  modalCard: { width: '100%', padding: theme.spacing.xl, alignItems: 'center' },
+  modalTitle: { fontFamily: theme.typography.fontFamily.heading, fontSize: theme.typography.sizes.xxl, color: theme.colors.primary, marginBottom: theme.spacing.lg },
+  gameOverTitle: { fontFamily: theme.typography.fontFamily.heading, fontSize: theme.typography.sizes.xxxl, color: theme.colors.primary, marginBottom: theme.spacing.sm, textShadowColor: 'rgba(251, 191, 36, 0.6)', textShadowRadius: 15 },
+  modalSubtitle: { fontFamily: theme.typography.fontFamily.body, color: theme.colors.textLight, textAlign: 'center', marginBottom: 15 },
+  modalContent: { width: '100%' },
+  resultRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: theme.spacing.xs },
+  resultLabel: { fontFamily: theme.typography.fontFamily.body, fontSize: theme.typography.sizes.md, color: theme.colors.textMuted, flex: 1 },
+  resultValue: { fontFamily: theme.typography.fontFamily.bodyBold, fontSize: theme.typography.sizes.md, color: theme.colors.textLight, flex: 1, textAlign: 'right' },
+  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.1)', marginVertical: theme.spacing.md },
+  winnerText: { fontFamily: theme.typography.fontFamily.heading, fontSize: theme.typography.sizes.xl, color: theme.colors.success, textAlign: 'center', marginVertical: theme.spacing.md },
+  trashTalkText: { fontFamily: theme.typography.fontFamily.bodyBold, fontSize: theme.typography.sizes.md, color: '#38BDF8', textAlign: 'center', fontStyle: 'italic', marginTop: theme.spacing.sm, marginBottom: theme.spacing.sm },
+  finalScoreText: { fontFamily: theme.typography.fontFamily.heading, fontSize: theme.typography.sizes.lg, color: theme.colors.textLight, textAlign: 'center', marginTop: theme.spacing.md },
+  nextButton: { marginTop: theme.spacing.lg }
 });
