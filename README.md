@@ -1,7 +1,5 @@
 # ⚽ Football Data Guessing Game
 
-> A full-stack, offline-first mobile guessing game powered by real-world football data.
-
 Bu proje; dünyanın en büyük 5 liginden (ve Süper Lig'den) kazınmış, temizlenmiş ve optimize edilmiş gerçek istatistikleri temel alan bir React Native (Expo) mobil tahmin oyunudur.
 
 ## ✨ Özellikler (Features)
@@ -70,4 +68,4 @@ python veri_cekme.py
 adımlarını izleyebilirsiniz.
 
 ---
-*Geliştirici:* [Sizin İsminiz/Linkiniz]
+*Geliştirici:* [Samet Demirkaya](https://github.com/sametdemirkaya)
