@@ -54,13 +54,13 @@ const getSimilarityScore = (a, b) => {
 
 export const searchPlayerLocal = async (playerName) => {
   await new Promise(r => setTimeout(r, 150));
-  
+
   if (!playerName || playerName.trim() === "") {
     throw new Error("Lütfen bir futbolcu ismi giriniz.");
   }
 
   const query = normalizeText(playerName);
-  
+
   // ADIM A: Birebir Eşleşme
   let exactMatches = footballData.filter(p => normalizeText(p.Player) === query);
   if (exactMatches.length > 0) {
@@ -79,12 +79,12 @@ export const searchPlayerLocal = async (playerName) => {
     return { match_type: "multiple", players: top3.map(p => ({ name: p.Player, score: p.oynanabilirlik_skoru })) };
   }
 
-  // ADIM C: Toleranslı Arama (Fuzzy Match cutoff = 0.30)
+  // ADIM C: Toleranslı Arama (Fuzzy Match cutoff = 0.45)
   let fuzzyMatches = [];
   for (const player of footballData) {
     const normName = normalizeText(player.Player);
     const sim = getSimilarityScore(query, normName);
-    if (sim >= 0.30) {
+    if (sim >= 0.45) {
       fuzzyMatches.push({ ...player, _sim: sim });
     }
   }
@@ -107,7 +107,7 @@ export const searchPlayerLocal = async (playerName) => {
 
 export const startNewGameLocal = async (difficultyLevel) => {
   await new Promise(r => setTimeout(r, 150));
-  
+
   const formattedDiff = difficultyLevel.charAt(0).toUpperCase() + difficultyLevel.slice(1).toLowerCase();
   const filteredData = footballData.filter(p => p.Zorluk_Seviyesi === formattedDiff);
   if (filteredData.length === 0) {
@@ -115,7 +115,7 @@ export const startNewGameLocal = async (difficultyLevel) => {
   }
 
   const targetPlayer = filteredData[Math.floor(Math.random() * filteredData.length)];
-  
+
   // Mevki Tespiti
   const rawPos = String(targetPlayer.Pos).toUpperCase();
   let primaryPos = 'MF';
@@ -125,7 +125,7 @@ export const startNewGameLocal = async (difficultyLevel) => {
   else if (rawPos.includes('GK')) primaryPos = 'GK';
 
   const requiredFeatures = [...UNIVERSAL_FEATURES, ...(POSITION_SPECIFIC_FEATURES[primaryPos] || [])];
-  
+
   const playerData = {};
   for (const feat of requiredFeatures) {
     playerData[feat] = targetPlayer[feat] !== undefined ? targetPlayer[feat] : null;
@@ -141,7 +141,7 @@ export const startNewGameLocal = async (difficultyLevel) => {
 
 export const submitRoundLocal = async (targetPlayerName, targetStatName, targetStatValue, p1Guess, p2Guess) => {
   await new Promise(r => setTimeout(r, 200));
-  
+
   // Fuzzy find logic for submitting (Python backend used fuzzy_find_player which does exact -> substring -> fuzzy)
   // For simplicity, since the inputs here are already validated by searchPlayerLocal in GameScreen,
   // we can just use exact match on the exact names that searchPlayerLocal returned.

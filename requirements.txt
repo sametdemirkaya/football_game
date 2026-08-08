@@ -1,2 +1,22 @@
-pandas
-soccerdata
+# ==========================================
+# Football Game - Python Requirements
+# ==========================================
+# Bu dosya, veri boru hattını (Data Pipeline) ve 
+# eski FastAPI sunucusunu çalıştırmak için gereklidir.
+# Kurulum: pip install -r requirements.txt
+# ==========================================
+
+# 1. Data Pipeline (Veri Çekme ve Temizleme)
+pandas==2.2.0
+numpy==1.26.3
+seleniumbase==4.23.0
+
+# 2. Backend (FastAPI - Arşiv)
+fastapi==0.109.0
+uvicorn==0.27.0
+python-dotenv==1.0.1
+pydantic==2.5.3
+
+# 3. İsteğe Bağlı Yardımcı Araçlar
+black==24.1.1       # Kod formatlama (Opsiyonel)
+pytest==8.0.0       # Testler (Opsiyonel)
